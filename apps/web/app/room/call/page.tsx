@@ -30,8 +30,8 @@ function GestureOverlay() {
         })
         const data = await res.json()
         setLastResult(data.predicted_gloss ?? '')
-      } catch {
-        console.warn('Predict error — is the API server running?')
+      } catch (err) {
+        console.warn('Predict error:', err)
       }
     },
     [localParticipant]
