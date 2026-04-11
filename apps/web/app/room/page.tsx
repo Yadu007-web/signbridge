@@ -40,24 +40,35 @@ export default function LobbyPage() {
   }
 
   return (
-    <main style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#0f0f0f',
-      fontFamily: 'Inter, sans-serif',
-    }}>
-      <div style={{
-        background: '#1a1a1a',
-        border: '1px solid #2a2a2a',
-        borderRadius: '16px',
-        padding: '2.5rem',
-        width: '100%',
-        maxWidth: '420px',
-      }}>
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#0f0f0f',
+        fontFamily: 'Inter, sans-serif',
+      }}
+    >
+      <div
+        style={{
+          background: '#1a1a1a',
+          border: '1px solid #2a2a2a',
+          borderRadius: '16px',
+          padding: '2.5rem',
+          width: '100%',
+          maxWidth: '420px',
+        }}
+      >
         <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: '600', color: '#ffffff', marginBottom: '0.5rem' }}>
+          <h1
+            style={{
+              fontSize: '1.8rem',
+              fontWeight: '600',
+              color: '#ffffff',
+              marginBottom: '0.5rem',
+            }}
+          >
             SignBridge
           </h1>
           <p style={{ color: '#888', fontSize: '0.9rem' }}>
@@ -66,7 +77,14 @@ export default function LobbyPage() {
         </div>
 
         <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', color: '#ccc', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+          <label
+            style={{
+              display: 'block',
+              color: '#ccc',
+              fontSize: '0.85rem',
+              marginBottom: '0.4rem',
+            }}
+          >
             Your name
           </label>
           <input
@@ -90,7 +108,14 @@ export default function LobbyPage() {
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', color: '#ccc', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+          <label
+            style={{
+              display: 'block',
+              color: '#ccc',
+              fontSize: '0.85rem',
+              marginBottom: '0.4rem',
+            }}
+          >
             Room name
           </label>
           <input
@@ -114,7 +139,13 @@ export default function LobbyPage() {
         </div>
 
         {error && (
-          <p style={{ color: '#ff6b6b', fontSize: '0.85rem', marginBottom: '1rem' }}>
+          <p
+            style={{
+              color: '#ff6b6b',
+              fontSize: '0.85rem',
+              marginBottom: '1rem',
+            }}
+          >
             {error}
           </p>
         )}
