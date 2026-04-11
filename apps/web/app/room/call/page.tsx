@@ -1,6 +1,6 @@
 'use client'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Suspense, useRef, useCallback, useState } from 'react'
+import { Suspense, useCallback, useState } from 'react'
 import {
   LiveKitRoom,
   VideoConference,
@@ -14,7 +14,6 @@ import {
 
 function GestureOverlay() {
   const { localParticipant } = useLocalParticipant()
-  const videoRef = useRef<HTMLVideoElement>(null)
   const [lastResult, setLastResult] = useState<string>('')
   const [isSignActive, setIsSignActive] = useState(true)
 
@@ -31,15 +30,14 @@ function GestureOverlay() {
         })
         const data = await res.json()
         setLastResult(data.predicted_gloss ?? '')
-      } catch (err) {
-        console.warn('Predict error:', err)
+      } catch {
+        console.warn('Predict error — is the API server running?')
       }
     },
     [localParticipant]
   )
 
   const { status, confidence, handsDetected } = useGestureCapture(
-    videoRef,
     handleBufferFull,
     isSignActive
   )
@@ -90,9 +88,11 @@ function GestureOverlay() {
           <span style={{ fontWeight: '500' }}>
             {status === 'initialising'
               ? 'Loading gesture AI...'
-              : handsDetected
-                ? 'Hands detected'
-                : 'No hands detected'}
+              : status === 'error'
+                ? 'Camera error'
+                : handsDetected
+                  ? 'Hands detected'
+                  : 'No hands detected'}
           </span>
         </div>
 
@@ -139,14 +139,6 @@ function GestureOverlay() {
       >
         {isSignActive ? 'ASL capture ON' : 'ASL capture OFF'}
       </button>
-
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        playsInline
-        style={{ display: 'none' }}
-      />
     </div>
   )
 }
