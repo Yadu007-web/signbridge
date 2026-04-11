@@ -33,7 +33,7 @@ export default function LobbyPage() {
         name: name.trim(),
       })
       router.push(`/room/call?${params.toString()}`)
-    } catch (err) {
+    } catch {
       setError('Could not connect. Make sure the API server is running.')
       setLoading(false)
     }

@@ -17,107 +17,134 @@ export interface LandmarkFrame {
 const BUFFER_SIZE = 60
 
 export function useGestureCapture(
-  videoRef: React.RefObject<HTMLVideoElement | null>,
   onBufferFull: (frames: LandmarkFrame[]) => void,
   active: boolean = true
 ) {
   const workerRef = useRef<Worker | null>(null)
-  const bufferRef = useRef<LandmarkFrame[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const bufferRef = useRef<LandmarkFrame[]>([])
+  const onBufferFullRef = useRef(onBufferFull)
+  const activeRef = useRef(active)
   const [status, setStatus] = useState<GestureStatus>('idle')
   const [confidence, setConfidence] = useState(0)
   const [handsDetected, setHandsDetected] = useState(false)
 
-  const startCapture = useCallback(() => {
-    if (!videoRef.current || !workerRef.current) return
-    const video = videoRef.current
+  useEffect(() => {
+    onBufferFullRef.current = onBufferFull
+  }, [onBufferFull])
 
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
+
+  const beginInterval = useCallback(() => {
+    if (!videoRef.current || !workerRef.current) return
+    if (intervalRef.current) return
+    const video = videoRef.current
     intervalRef.current = setInterval(() => {
+      if (!activeRef.current) return
       if (video.readyState < 2) return
-      try {
-        const bitmap = createImageBitmap(video)
-        bitmap.then((bmp) => {
+      createImageBitmap(video)
+        .then((bmp) => {
           workerRef.current?.postMessage({ type: 'FRAME', bitmap: bmp }, [bmp])
         })
-      } catch (err) {
-        console.warn('Frame capture error:', err)
-      }
+        .catch((err) => console.warn('Frame capture error:', err))
     }, 33)
+  }, [])
 
-    setStatus('capturing')
-  }, [videoRef])
+  useEffect(() => {
+    let cancelled = false
+
+    async function init() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: 'user' },
+          audio: false,
+        })
+
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+
+        streamRef.current = stream
+
+        const video = document.createElement('video')
+        video.srcObject = stream
+        video.autoplay = true
+        video.muted = true
+        video.playsInline = true
+        await video.play()
+        videoRef.current = video
+
+        const worker = new Worker('/workers/gesture.worker.js')
+        workerRef.current = worker
+
+        worker.onmessage = (e) => {
+          const { type } = e.data
+          if (type === 'READY') {
+            setStatus('ready')
+            if (activeRef.current) {
+              beginInterval()
+              setStatus('capturing')
+            }
+            return
+          }
+          if (type === 'NO_HANDS') {
+            setHandsDetected(false)
+            return
+          }
+          if (type === 'LOW_CONFIDENCE') {
+            setHandsDetected(false)
+            setConfidence(e.data.confidence)
+            return
+          }
+          if (type === 'LANDMARKS') {
+            setHandsDetected(true)
+            setConfidence(e.data.confidence)
+            const frame: LandmarkFrame = {
+              landmarks: e.data.landmarks,
+              confidence: e.data.confidence,
+              timestamp: e.data.timestamp,
+            }
+            bufferRef.current.push(frame)
+            if (bufferRef.current.length > BUFFER_SIZE) {
+              bufferRef.current.shift()
+            }
+            if (bufferRef.current.length === BUFFER_SIZE) {
+              onBufferFullRef.current([...bufferRef.current])
+            }
+          }
+        }
+
+        worker.postMessage({ type: 'INIT' })
+        setStatus('initialising')
+      } catch {
+        if (!cancelled) setStatus('error')
+      }
+    }
+
+    init()
+
+    return () => {
+      cancelled = true
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      workerRef.current?.terminate()
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+    }
+  }, [beginInterval])
 
   const stopCapture = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }
-    setStatus('ready')
   }, [])
 
-  useEffect(() => {
-    const worker = new Worker('/workers/gesture.worker.js')
-    workerRef.current = worker
-    setStatus('initialising')
-
-    worker.onmessage = (e) => {
-      const { type } = e.data
-
-      if (type === 'READY') {
-        setStatus('ready')
-        return
-      }
-
-      if (type === 'NO_HANDS') {
-        setHandsDetected(false)
-        return
-      }
-
-      if (type === 'LOW_CONFIDENCE') {
-        setHandsDetected(false)
-        setConfidence(e.data.confidence)
-        return
-      }
-
-      if (type === 'LANDMARKS') {
-        setHandsDetected(true)
-        setConfidence(e.data.confidence)
-
-        const frame: LandmarkFrame = {
-          landmarks: e.data.landmarks,
-          confidence: e.data.confidence,
-          timestamp: e.data.timestamp,
-        }
-
-        bufferRef.current.push(frame)
-
-        if (bufferRef.current.length > BUFFER_SIZE) {
-          bufferRef.current.shift()
-        }
-
-        if (bufferRef.current.length === BUFFER_SIZE) {
-          onBufferFull([...bufferRef.current])
-        }
-      }
-    }
-
-    worker.postMessage({ type: 'INIT' })
-
-    return () => {
-      stopCapture()
-      worker.terminate()
-    }
-  }, [onBufferFull, stopCapture])
-
-  useEffect(() => {
-    if (!active) {
-      stopCapture()
-      return
-    }
-    if (status === 'ready') {
-      startCapture()
-    }
-  }, [active, status, startCapture, stopCapture])
-
-  return { status, confidence, handsDetected, startCapture, stopCapture }
+  return { status, confidence, handsDetected, stopCapture }
 }
