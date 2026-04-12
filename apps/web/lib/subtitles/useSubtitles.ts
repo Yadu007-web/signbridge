@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useLocalParticipant, useRoomContext } from '@livekit/components-react'
-import { DataPacket_Kind } from 'livekit-client'
 import { SubtitleEvent, TranscriptEntry } from './types'
 
 const SUBTITLE_DISPLAY_MS = 4000
@@ -97,7 +96,6 @@ export function useSubtitles() {
       try {
         await r.localParticipant.publishData(payload, {
           reliable: true,
-          kind: DataPacket_Kind.RELIABLE,
         })
       } catch (err) {
         console.warn('Broadcast error:', err)
