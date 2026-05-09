@@ -74,17 +74,21 @@ export function useSubtitles() {
     }
   }, [showSubtitle])
 
-  const broadcastSignSubtitle = useCallback(
-    async (gloss: string, confidence: number) => {
+  const broadcastSubtitle = useCallback(
+    async (
+      gloss: string,
+      confidence: number,
+      type: 'sign_subtitle' | 'speech_subtitle'
+    ) => {
       const r = roomRef.current
       const p = participantRef.current
       if (!r || !p) return
-      if (confidence < MIN_CONFIDENCE) return
-      if (!gloss || gloss === 'unknown') return
+      if (type === 'sign_subtitle' && confidence < MIN_CONFIDENCE) return
+      if (!gloss) return
 
       const event: SubtitleEvent = {
-        type: 'sign_subtitle',
-        gloss: gloss.toUpperCase(),
+        type,
+        gloss: type === 'sign_subtitle' ? gloss.toUpperCase() : gloss,
         confidence,
         participantId: p.identity,
         participantName: p.name ?? p.identity,
@@ -94,19 +98,33 @@ export function useSubtitles() {
 
       const payload = new TextEncoder().encode(JSON.stringify(event))
       try {
-        await r.localParticipant.publishData(payload, {
-          reliable: true,
-        })
+        await r.localParticipant.publishData(payload, { reliable: true })
       } catch (err) {
         console.warn('Broadcast error:', err)
       }
-
       showSubtitle(event)
     },
     [showSubtitle]
   )
 
+  const broadcastSignSubtitle = useCallback(
+    (gloss: string, confidence: number) =>
+      broadcastSubtitle(gloss, confidence, 'sign_subtitle'),
+    [broadcastSubtitle]
+  )
+
+  const broadcastSpeechSubtitle = useCallback(
+    (text: string) => broadcastSubtitle(text, 1.0, 'speech_subtitle'),
+    [broadcastSubtitle]
+  )
+
   const clearTranscript = useCallback(() => setTranscript([]), [])
 
-  return { activeSubtitles, transcript, broadcastSignSubtitle, clearTranscript }
+  return {
+    activeSubtitles,
+    transcript,
+    broadcastSignSubtitle,
+    broadcastSpeechSubtitle,
+    clearTranscript,
+  }
 }
