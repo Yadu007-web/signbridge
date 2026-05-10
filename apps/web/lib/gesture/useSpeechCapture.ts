@@ -29,13 +29,18 @@ export function useSpeechCapture(
   const recRef = useRef<ISpeechRecognition | null>(null)
   const mountedRef = useRef(true)
   const startedRef = useRef(false)
+
   const [listening, setListening] = useState(false)
-  const [supported, setSupported] = useState(false)
+  const [supported] = useState(
+    typeof window !== 'undefined' &&
+      ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+  )
   const [error, setError] = useState('')
 
   useEffect(() => {
     onTranscriptRef.current = onTranscript
   }, [onTranscript])
+
   useEffect(() => {
     activeRef.current = active
   }, [active])
@@ -45,13 +50,11 @@ export function useSpeechCapture(
 
     const hasSR =
       'SpeechRecognition' in window || 'webkitSpeechRecognition' in window
+
     if (!hasSR) {
-      setSupported(false)
       setError('Use Chrome for speech features')
       return
     }
-
-    setSupported(true)
 
     function createRec(): ISpeechRecognition {
       const SR =
@@ -141,6 +144,7 @@ export function useSpeechCapture(
   useEffect(() => {
     const r = recRef.current
     if (!r) return
+
     if (active && !startedRef.current) {
       try {
         r.start()
@@ -153,7 +157,10 @@ export function useSpeechCapture(
       } catch {
         /* ignore */
       }
-      setListening(false)
+
+      queueMicrotask(() => {
+        if (mountedRef.current) setListening(false)
+      })
     }
   }, [active])
 
