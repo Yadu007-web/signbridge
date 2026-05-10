@@ -30,12 +30,15 @@ export function useSpeechCapture(
   const mountedRef = useRef(true)
   const startedRef = useRef(false)
 
-  const [listening, setListening] = useState(false)
-  const [supported] = useState(
+  const hasSR =
     typeof window !== 'undefined' &&
-      ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+
+  const [listening, setListening] = useState(false)
+  const [supported] = useState(hasSR)
+  const [error, setError] = useState(
+    hasSR ? '' : 'Use Chrome for speech features'
   )
-  const [error, setError] = useState('')
 
   useEffect(() => {
     onTranscriptRef.current = onTranscript
@@ -48,11 +51,7 @@ export function useSpeechCapture(
   useEffect(() => {
     mountedRef.current = true
 
-    const hasSR =
-      'SpeechRecognition' in window || 'webkitSpeechRecognition' in window
-
     if (!hasSR) {
-      setError('Use Chrome for speech features')
       return
     }
 
@@ -75,19 +74,25 @@ export function useSpeechCapture(
       r.onresult = (e: SpeechRecognitionEvent) => {
         if (!mountedRef.current) return
         setError('')
+
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const text = e.results[i][0].transcript.trim()
           const isFinal = e.results[i].isFinal
-          if (text) onTranscriptRef.current(text, isFinal)
+
+          if (text) {
+            onTranscriptRef.current(text, isFinal)
+          }
         }
       }
 
       r.onerror = (e: SpeechRecognitionErrorEvent) => {
         if (!mountedRef.current) return
         if (e.error === 'aborted' || e.error === 'no-speech') return
+
         if (e.error === 'not-allowed') {
           setError('Mic blocked — allow in browser settings')
         }
+
         startedRef.current = false
         setListening(false)
       }
@@ -101,12 +106,16 @@ export function useSpeechCapture(
 
       r.onend = () => {
         if (!mountedRef.current) return
+
         startedRef.current = false
         setListening(false)
+
         if (activeRef.current && mountedRef.current) {
           setTimeout(() => {
             if (!mountedRef.current || !activeRef.current) return
+
             const next = createRec()
+
             try {
               next.start()
             } catch {
@@ -121,25 +130,29 @@ export function useSpeechCapture(
 
     const t = setTimeout(() => {
       if (!mountedRef.current) return
+
       const r = createRec()
-      if (activeRef.current)
+
+      if (activeRef.current) {
         try {
           r.start()
         } catch {
           /* ignore */
         }
+      }
     }, 3000)
 
     return () => {
       mountedRef.current = false
       clearTimeout(t)
+
       try {
         recRef.current?.abort()
       } catch {
         /* ignore */
       }
     }
-  }, [])
+  }, [hasSR])
 
   useEffect(() => {
     const r = recRef.current
@@ -159,7 +172,9 @@ export function useSpeechCapture(
       }
 
       queueMicrotask(() => {
-        if (mountedRef.current) setListening(false)
+        if (mountedRef.current) {
+          setListening(false)
+        }
       })
     }
   }, [active])
