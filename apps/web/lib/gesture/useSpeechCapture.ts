@@ -1,13 +1,32 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 
+interface ISpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  maxAlternatives: number
+  start(): void
+  stop(): void
+  abort(): void
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onstart: (() => void) | null
+  onend: (() => void) | null
+}
+
+interface SpeechWindow extends Window {
+  SpeechRecognition?: new () => ISpeechRecognition
+  webkitSpeechRecognition?: new () => ISpeechRecognition
+}
+
 export function useSpeechCapture(
   onTranscript: (text: string, isFinal: boolean) => void,
   active: boolean = true
 ) {
   const onTranscriptRef = useRef(onTranscript)
   const activeRef = useRef(active)
-  const recRef = useRef<unknown>(null)
+  const recRef = useRef<ISpeechRecognition | null>(null)
   const mountedRef = useRef(true)
   const startedRef = useRef(false)
   const [listening, setListening] = useState(false)
@@ -24,13 +43,9 @@ export function useSpeechCapture(
   useEffect(() => {
     mountedRef.current = true
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SR =
-      (window as any).SpeechRecognition ||
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).webkitSpeechRecognition
-
-    if (!SR) {
+    const hasSR =
+      'SpeechRecognition' in window || 'webkitSpeechRecognition' in window
+    if (!hasSR) {
       setSupported(false)
       setError('Use Chrome for speech features')
       return
@@ -38,38 +53,37 @@ export function useSpeechCapture(
 
     setSupported(true)
 
-    function createRecognition() {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const r: any = new SR()
+    function createRec(): ISpeechRecognition {
+      const SR =
+        (window as SpeechWindow).SpeechRecognition ??
+        (window as SpeechWindow).webkitSpeechRecognition
+
+      if (!SR) {
+        throw new Error('SpeechRecognition not supported')
+      }
+
+      const r = new SR()
+      recRef.current = r
       r.continuous = true
       r.interimResults = true
       r.lang = 'en-US'
       r.maxAlternatives = 1
-      recRef.current = r
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      r.onresult = (e: any) => {
+      r.onresult = (e: SpeechRecognitionEvent) => {
         if (!mountedRef.current) return
         setError('')
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const text = e.results[i][0].transcript.trim()
           const isFinal = e.results[i].isFinal
-          console.log('STT:', text, 'final:', isFinal)
           if (text) onTranscriptRef.current(text, isFinal)
         }
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      r.onerror = (e: any) => {
+      r.onerror = (e: SpeechRecognitionErrorEvent) => {
         if (!mountedRef.current) return
-        if (e.error === 'aborted' || e.error === 'no-speech') {
-          // no-speech means silence — just restart
-          return
-        }
+        if (e.error === 'aborted' || e.error === 'no-speech') return
         if (e.error === 'not-allowed') {
           setError('Mic blocked — allow in browser settings')
-        } else {
-          console.warn('Speech error:', e.error)
         }
         startedRef.current = false
         setListening(false)
@@ -80,24 +94,20 @@ export function useSpeechCapture(
         startedRef.current = true
         setListening(true)
         setError('')
-        console.log('Speech started ✅')
       }
 
       r.onend = () => {
         if (!mountedRef.current) return
         startedRef.current = false
         setListening(false)
-        // Recreate and restart to avoid state issues
         if (activeRef.current && mountedRef.current) {
           setTimeout(() => {
-            if (mountedRef.current && activeRef.current) {
-              createRecognition()
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              try {
-                ;(recRef.current as any).start()
-              } catch {
-                /* ignore */
-              }
+            if (!mountedRef.current || !activeRef.current) return
+            const next = createRec()
+            try {
+              next.start()
+            } catch {
+              /* ignore */
             }
           }, 300)
         }
@@ -106,37 +116,30 @@ export function useSpeechCapture(
       return r
     }
 
-    // Delay start by 3 seconds to let LiveKit fully connect first
-    const initTimer = setTimeout(() => {
+    const t = setTimeout(() => {
       if (!mountedRef.current) return
-      const r = createRecognition()
-      if (activeRef.current) {
+      const r = createRec()
+      if (activeRef.current)
         try {
           r.start()
         } catch {
           /* ignore */
         }
-      }
     }, 3000)
 
     return () => {
       mountedRef.current = false
-      clearTimeout(initTimer)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const r = recRef.current as any
-      if (r)
-        try {
-          r.abort()
-        } catch {
-          /* ignore */
-        }
+      clearTimeout(t)
+      try {
+        recRef.current?.abort()
+      } catch {
+        /* ignore */
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r = recRef.current as any
+    const r = recRef.current
     if (!r) return
     if (active && !startedRef.current) {
       try {
